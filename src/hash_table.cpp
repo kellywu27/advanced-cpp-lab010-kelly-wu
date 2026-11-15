@@ -38,30 +38,55 @@ std::size_t HashTable::probe(const std::string& key) const {
 }
 
 bool HashTable::insert(const std::string& key, int value) {
-    (void)key;
-    (void)value;
-    throw std::logic_error("Student implementation required: insert");
+    std::size_t index = probe(key);
+    if (table_[index].occupied && !table_[index].deleted) {
+        return false;  // key already exists
+    }
+
+    // keep table at most half full so quadratic probing always finds a slot
+    if (static_cast<double>(size_ + 1) / static_cast<double>(table_.size()) > 0.5) {
+        rehash();
+        index = probe(key);  // capacity change; recompute the slot
+    }
+
+    table_[index].key = key;
+    table_[index].value = value;
+    table_[index].occupied = true;
+    table_[index].deleted = false;
+    ++size_;
+    return true;
 }
 
 bool HashTable::remove(const std::string& key) {
-    (void)key;
-    throw std::logic_error("Student implementation required: remove");
+    const std::size_t index = probe(key);
+    if (!table_[index].occupied || table_[index].deleted) {
+        return false;
+    }
+    table_[index].deleted = true;  // tombstone: stays occupied so probe chains aren't broken
+    --size_;
+    return true;
 }
 
 bool HashTable::contains(const std::string& key) const {
-    (void)key;
-    throw std::logic_error("Student implementation required: contains");
+    const std::size_t index = probe(key);
+    return table_[index].occupied && !table_[index].deleted;
 }
 
 int HashTable::get(const std::string& key) const {
-    (void)key;
-    throw std::logic_error("Student implementation required: get");
+    const std::size_t index = probe(key);
+    if (!table_[index].occupied || table_[index].deleted) {
+        throw std::out_of_range("Key not found: " + key);
+    }
+    return table_[index].value;
 }
 
 bool HashTable::update(const std::string& key, int newValue) {
-    (void)key;
-    (void)newValue;
-    throw std::logic_error("Student implementation required: update");
+    const std::size_t index = probe(key);
+    if (!table_[index].occupied || table_[index].deleted) {
+        return false;
+    }
+    table_[index].value = newValue;
+    return true;
 }
 
 std::size_t HashTable::size() const noexcept {
@@ -101,7 +126,15 @@ std::vector<int> HashTable::values() const {
 }
 
 void HashTable::rehash() {
-    throw std::logic_error("Student implementation required: rehash");
+    std::vector<HashEntry> old = std::move(table_);
+    table_.assign(nextPrime(old.size() * 2), HashEntry());
+
+    // reinsert live entries only (tombstones dropped); size_ stays the same.
+    for (const HashEntry& entry : old) {
+        if (entry.occupied && !entry.deleted) {
+            table_[probe(entry.key)] = entry;
+        }
+    }
 }
 
 bool HashTable::isPrime(std::size_t value) const {
